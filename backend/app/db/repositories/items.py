@@ -18,9 +18,12 @@ from app.db.repositories.profiles import ProfilesRepository
 from app.db.repositories.tags import TagsRepository
 from app.models.domain.items import Item
 from app.models.domain.users import User
+import logging
 
 SELLER_USERNAME_ALIAS = "seller_username"
 SLUG_ALIAS = "slug"
+
+logger = logging.getLogger('uvicorn.asgi')
 
 CAMEL_OR_SNAKE_CASE_TO_WORDS = r"^[a-z\d_\-]+|[A-Z\d_\-][^A-Z\d_\-]*"
 
@@ -104,6 +107,7 @@ class ItemsRepository(BaseRepository):  # noqa: WPS214
         self,
         *,
         tag: Optional[str] = None,
+        title: Optional[str] = None,
         seller: Optional[str] = None,
         favorited: Optional[str] = None,
         limit: int = 20,
@@ -136,6 +140,14 @@ class ItemsRepository(BaseRepository):  # noqa: WPS214
             ),
         )
         # fmt: on
+
+        if title:
+            query_params.append('%' + title + '%')
+            query_params_count += 1
+
+            # fmt: off
+            query = query.where(items.title.like(Parameter(query_params_count))).select(items)
+            # fmt: on
 
         if tag:
             query_params.append(tag)
@@ -202,8 +214,9 @@ class ItemsRepository(BaseRepository):  # noqa: WPS214
         )
         query_params.extend([limit, offset])
 
+        #logger.info(query.get_sql())
         items_rows = await self.connection.fetch(query.get_sql(), *query_params)
-
+        #logger.info(query.get_sql())
         return [
             await self.get_item_by_slug(slug=item_row['slug'], requested_user=requested_user)
             for item_row in items_rows
